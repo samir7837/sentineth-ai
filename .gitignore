@@ -1,0 +1,23 @@
+# Environment
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# IDE
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+.env
+.venv/
+backend/storage/documents/*
+__pycache__/
+.cache/
+huggingface/
+node_modules/
+*.log
