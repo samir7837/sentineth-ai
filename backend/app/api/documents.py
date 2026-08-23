@@ -1,5 +1,4 @@
 import logging
-from pathlib import Path
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -7,17 +6,17 @@ from sqlalchemy.orm import Session
 
 from app.db.database import get_db
 
+from app.dependencies import (
+    get_embedding_provider,
+    get_llm_provider,
+    get_storage_provider,
+    get_vector_store,
+)
+
 from app.providers.embeddings.base import EmbeddingProvider
-from app.providers.embeddings.local import LocalEmbeddingProvider
-
 from app.providers.llm.base import LLMProvider
-from app.providers.llm.openrouter import OpenRouterProvider
-
 from app.providers.storage.base import StorageProvider
-from app.providers.storage.local import LocalStorageProvider
-
 from app.providers.vector.base import VectorStore
-from app.providers.vector.qdrant import QdrantVectorStore
 
 from app.schemas import (
     QueryRequest,
@@ -38,33 +37,6 @@ router = APIRouter(
     prefix="/organizations",
     tags=["Documents"],
 )
-
-
-def get_embedding_provider() -> EmbeddingProvider:
-    return LocalEmbeddingProvider()
-
-
-def get_vector_store() -> VectorStore:
-    return QdrantVectorStore(
-        vector_size=384,
-    )
-
-
-def get_storage_provider() -> StorageProvider:
-    base_dir = Path(__file__).resolve().parents[2]
-    storage_dir = base_dir / "storage" / "documents"
-
-    return LocalStorageProvider(storage_dir)
-
-
-def get_llm_provider() -> LLMProvider:
-    try:
-        return OpenRouterProvider()
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=500,
-            detail="LLM provider is not configured.",
-        ) from exc
 
 
 @router.post("/{organization_id}/documents")

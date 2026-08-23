@@ -28,6 +28,7 @@ class SearchResult(BaseModel):
     document_id: str | None = None
     chunk_id: str | None = None
     chunk_index: int | None = None
+    filename: str | None = None
     content: str | None = None
 
 

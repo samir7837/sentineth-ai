@@ -18,7 +18,9 @@ if not DATABASE_URL:
 
 engine = create_engine(
     DATABASE_URL,
-    echo=True,
+    # Statement logging is opt-in. Leaving echo on unconditionally logs
+    # every query - including document content - and is slow.
+    echo=os.getenv("SQL_ECHO", "false").lower() in {"1", "true", "yes"},
 )
 
 

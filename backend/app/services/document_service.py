@@ -8,19 +8,8 @@ from sqlalchemy.orm import Session
 from app.db.models import Document
 from app.providers.embeddings.base import EmbeddingProvider
 from app.providers.storage.base import StorageProvider
-from app.providers.storage.local import LocalStorageProvider
 from app.providers.vector.base import VectorStore
 from app.services.ingestion_service import ingest_document
-
-
-BASE_DIR = Path(__file__).resolve().parents[2]
-
-STORAGE_DIR = BASE_DIR / "storage" / "documents"
-
-STORAGE_DIR.mkdir(
-    parents=True,
-    exist_ok=True,
-)
 
 
 def _compute_sha256(content: bytes) -> str:
