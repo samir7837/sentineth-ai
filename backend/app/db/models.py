@@ -92,6 +92,13 @@ class Document(Base):
         nullable=True,
     )
 
+    # Stable, categorised reason a document failed. error_message is free
+    # text for operators; this is what callers are allowed to branch on.
+    error_code: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=utcnow,
@@ -113,6 +120,10 @@ class Document(Base):
         back_populates="document",
         cascade="all, delete-orphan",
     )
+
+    @property
+    def chunk_count(self) -> int:
+        return len(self.chunks)
 
 
 class DocumentChunk(Base):

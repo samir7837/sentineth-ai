@@ -17,6 +17,7 @@ async def ingest_document(
 ) -> list[DocumentChunk]:
     document.status = "PROCESSING"
     document.error_message = None
+    document.error_code = None
 
     try:
         if document.content_type != "application/pdf":
@@ -98,6 +99,7 @@ async def ingest_document(
         # Everything succeeded.
         document.status = "READY"
         document.error_message = None
+        document.error_code = None
 
         db.commit()
 
@@ -106,6 +108,7 @@ async def ingest_document(
     except Exception as exc:
         document.status = "FAILED"
         document.error_message = "Document processing failed."
+        document.error_code = "PROCESSING_FAILED"
 
         db.rollback()
 

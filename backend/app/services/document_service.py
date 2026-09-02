@@ -73,6 +73,7 @@ async def save_document(
         content_hash=content_hash,
         status="UPLOADED",
         error_message=None,
+        error_code=None,
     )
 
     # Flush before writing any bytes, so the row and its id exist first. The
@@ -112,6 +113,7 @@ async def save_document(
 
         document.status = "FAILED"
         document.error_message = "Document processing failed."
+        document.error_code = "PROCESSING_FAILED"
 
         try:
             db.add(document)

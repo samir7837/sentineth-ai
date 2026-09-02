@@ -1,9 +1,9 @@
 import logging
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session, selectinload
 
 from app.db.database import get_db
 from app.db.models import Document
@@ -18,6 +18,9 @@ from app.providers.llm.base import LLMProvider
 from app.providers.storage.base import StorageProvider
 from app.providers.vector.base import VectorStore
 from app.schemas import (
+    DocumentListResponse,
+    DocumentResponse,
+    DocumentUploadResponse,
     QueryRequest,
     QueryResponse,
     SearchRequest,
@@ -37,9 +40,40 @@ router = APIRouter(
     tags=["Documents"],
 )
 
-@router.get("/{organization_id}/documents")
-def list_documents(organization_id: UUID, _: object = Depends(require_organization_access), db: Session = Depends(get_db)):
-    return list(db.scalars(select(Document).where(Document.organization_id == organization_id).order_by(Document.created_at.desc())))
+@router.get(
+    "/{organization_id}/documents",
+    response_model=DocumentListResponse,
+)
+def list_documents(
+    organization_id: UUID,
+    _: object = Depends(require_organization_access),
+    db: Session = Depends(get_db),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+):
+    total = db.scalar(
+        select(func.count(Document.id)).where(
+            Document.organization_id == organization_id
+        )
+    )
+
+    documents = db.scalars(
+        select(Document)
+        .where(Document.organization_id == organization_id)
+        # chunk_count reads document.chunks; without this the listing is
+        # one lazy load per document.
+        .options(selectinload(Document.chunks))
+        .order_by(Document.created_at.desc())
+        .limit(limit)
+        .offset(offset)
+    ).all()
+
+    return DocumentListResponse(
+        items=[DocumentResponse.model_validate(document) for document in documents],
+        total=total or 0,
+        limit=limit,
+        offset=offset,
+    )
 
 @router.delete("/{organization_id}/documents/{document_id}", status_code=204)
 async def remove_document(organization_id: UUID, document_id: UUID, _: object = Depends(require_organization_access), db: Session = Depends(get_db), storage_provider: StorageProvider = Depends(get_storage_provider), vector_store: VectorStore = Depends(get_vector_store)):
@@ -57,7 +91,10 @@ async def reindex_one_document(organization_id: UUID, document_id: UUID, _: obje
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-@router.post("/{organization_id}/documents")
+@router.post(
+    "/{organization_id}/documents",
+    response_model=DocumentUploadResponse,
+)
 async def upload_document(
     organization_id: UUID,
     _: object = Depends(require_organization_access),
@@ -89,16 +126,10 @@ async def upload_document(
     else:
         message = "Document uploaded and is being processed."
 
-    return {
-        "id": str(document.id),
-        "filename": document.filename,
-        "content_type": document.content_type,
-        "file_size": document.file_size,
-        "storage_path": document.storage_path,
-        "status": document.status,
-        "message": message,
-        "chunks": len(document.chunks),
-    }
+    return DocumentUploadResponse(
+        **DocumentResponse.model_validate(document).model_dump(),
+        message=message,
+    )
 
 
 @router.post(

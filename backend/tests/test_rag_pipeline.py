@@ -60,11 +60,11 @@ def test_upload_extracts_chunks_and_indexes(
 
     assert body["status"] == "READY"
     assert body["filename"] == "q3-planning.pdf"
-    assert body["chunks"] >= 1
+    assert body["chunk_count"] >= 1
     assert body["file_size"] == len(REVENUE_PDF)
 
     # Vectors reached the store, stamped with the owning organization.
-    assert len(vector_store.points) == body["chunks"]
+    assert len(vector_store.points) == body["chunk_count"]
 
     for point in vector_store.points.values():
         assert point["payload"]["organization_id"] == org_id
@@ -257,3 +257,90 @@ def test_same_filename_twice_does_not_overwrite(
 
     assert not first_file.exists()
     assert second_file.read_bytes() == HIRING_PDF
+
+
+PUBLIC_DOCUMENT_FIELDS = {
+    "id",
+    "filename",
+    "content_type",
+    "file_size",
+    "status",
+    "error_code",
+    "chunk_count",
+    "created_at",
+    "updated_at",
+}
+
+
+def test_document_responses_do_not_leak_internal_fields(client, organization):
+    """Regression: neither route had a response_model.
+
+    The listing returned raw ORM objects and the upload route hand-built a
+    dict, so both published storage_path - an absolute filesystem path - and
+    the listing published content_hash and error_message too.
+    """
+    org_id = organization()
+
+    upload_body = upload(
+        client, org_id, "q3-planning.pdf", REVENUE_PDF
+    ).json()
+
+    assert set(upload_body) == PUBLIC_DOCUMENT_FIELDS | {"message"}
+
+    listing = client.get(f"/organizations/{org_id}/documents")
+
+    assert listing.status_code == 200, listing.text
+    assert set(listing.json()["items"][0]) == PUBLIC_DOCUMENT_FIELDS
+
+    for leaked in ("storage_path", "content_hash", "error_message"):
+        assert leaked not in listing.text
+        assert leaked not in str(upload_body)
+
+
+def test_listing_documents_is_paginated(client, organization):
+    org_id = organization()
+
+    for name in ("first.pdf", "second.pdf", "third.pdf"):
+        assert upload(client, org_id, name, REVENUE_PDF).status_code == 200
+
+    first_page = client.get(
+        f"/organizations/{org_id}/documents", params={"limit": 2}
+    ).json()
+
+    assert first_page["total"] == 3
+    assert first_page["limit"] == 2
+    assert first_page["offset"] == 0
+    assert len(first_page["items"]) == 2
+
+    second_page = client.get(
+        f"/organizations/{org_id}/documents",
+        params={"limit": 2, "offset": 2},
+    ).json()
+
+    assert second_page["total"] == 3
+    assert len(second_page["items"]) == 1
+
+    # Every document appears exactly once across the two pages.
+    paged = [item["id"] for item in first_page["items"] + second_page["items"]]
+    assert len(set(paged)) == 3
+
+    assert client.get(
+        f"/organizations/{org_id}/documents", params={"limit": 0}
+    ).status_code == 422
+
+
+def test_a_failed_document_reports_a_categorised_error_code(
+    client, organization
+):
+    org_id = organization()
+
+    client.post(
+        f"/organizations/{org_id}/documents",
+        files=(("file", ("notes.txt", b"plain text notes", "text/plain")),),
+    )
+
+    items = client.get(f"/organizations/{org_id}/documents").json()["items"]
+
+    assert len(items) == 1
+    assert items[0]["status"] == "FAILED"
+    assert items[0]["error_code"] == "PROCESSING_FAILED"

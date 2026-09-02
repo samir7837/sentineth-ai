@@ -50,6 +50,38 @@ class ApiKeyRotateRequest(BaseModel):
         return value.astimezone(UTC).replace(tzinfo=None)
 
 
+class DocumentResponse(BaseModel):
+    """Public shape of a document.
+
+    storage_path and content_hash are internal, and error_message is free
+    text with no contract, so none of them appear here. Callers get the
+    coarse status plus the categorised error_code.
+    """
+
+    id: UUID
+    filename: str
+    content_type: str
+    file_size: int
+    status: str
+    error_code: str | None = None
+    chunk_count: int
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class DocumentUploadResponse(DocumentResponse):
+    message: str
+
+
+class DocumentListResponse(BaseModel):
+    items: list[DocumentResponse]
+    total: int
+    limit: int
+    offset: int
+
+
 class SearchRequest(BaseModel):
     query: str = Field(..., min_length=1)
     limit: int = Field(default=5, ge=1, le=20)
