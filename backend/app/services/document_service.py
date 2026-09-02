@@ -59,17 +59,6 @@ async def save_document(
         file.filename or "unnamed_file"
     ).name
 
-    try:
-        storage_path = await storage_provider.save(
-            organization_id=str(organization_id),
-            filename=filename,
-            content=file_content,
-        )
-    except Exception as exc:
-        raise ValueError(
-            "Failed to store uploaded document."
-        ) from exc
-
     document = Document(
         organization_id=organization_id,
         filename=filename,
@@ -78,16 +67,36 @@ async def save_document(
             or "application/octet-stream"
         ),
         file_size=len(file_content),
-        storage_path=storage_path,
+        # Placeholder. The real path needs document.id, which only exists
+        # after the flush below, and is set before anything commits.
+        storage_path="",
         content_hash=content_hash,
         status="UPLOADED",
         error_message=None,
     )
 
-    try:
-        db.add(document)
-        db.flush()
+    # Flush before writing any bytes, so the row and its id exist first. The
+    # id is what makes the storage path unique, and a row without a file is
+    # recoverable in a way a file without a row is not.
+    db.add(document)
+    db.flush()
 
+    try:
+        document.storage_path = await storage_provider.save(
+            organization_id=str(organization_id),
+            document_id=str(document.id),
+            filename=filename,
+            content=file_content,
+        )
+        db.flush()
+    except Exception as exc:
+        db.rollback()
+
+        raise ValueError(
+            "Failed to store uploaded document."
+        ) from exc
+
+    try:
         await ingest_document(
             db=db,
             document=document,

@@ -219,3 +219,41 @@ def test_query_validation_rejects_blank_and_oversized_limit(
         f"/organizations/{org_id}/query",
         json={"query": "anything", "limit": 999},
     ).status_code == 422
+
+
+def test_same_filename_twice_does_not_overwrite(
+    client, organization, tmp_path
+):
+    """Regression: uploads were stored at {org}/{filename}.
+
+    Two documents sharing a filename resolved to the same path, so the
+    second upload silently overwrote the first one's bytes and deleting
+    either document removed the file both rows pointed at.
+    """
+    org_id = organization()
+    storage_root = tmp_path / "documents" / org_id
+
+    first = upload(client, org_id, "notes.pdf", REVENUE_PDF)
+    second = upload(client, org_id, "notes.pdf", HIRING_PDF)
+
+    assert first.status_code == 200, first.text
+    assert second.status_code == 200, second.text
+
+    first_id = first.json()["id"]
+    second_id = second.json()["id"]
+    assert first_id != second_id
+
+    # Each document owns a directory named after its id.
+    first_file = storage_root / first_id / "notes.pdf"
+    second_file = storage_root / second_id / "notes.pdf"
+
+    assert first_file.read_bytes() == REVENUE_PDF
+    assert second_file.read_bytes() == HIRING_PDF
+
+    # Deleting one leaves the other's bytes on disk.
+    assert client.delete(
+        f"/organizations/{org_id}/documents/{first_id}"
+    ).status_code == 204
+
+    assert not first_file.exists()
+    assert second_file.read_bytes() == HIRING_PDF
