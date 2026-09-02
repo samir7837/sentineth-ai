@@ -1,3 +1,4 @@
+from datetime import datetime
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -22,6 +23,7 @@ from app.api.documents import router as documents_router
 from app.db import models
 from app.db.database import get_db
 from app.schemas import OrganizationCreate, OrganizationResponse
+from app.security import hash_api_key, new_api_key, require_organization_access
 
 
 app = FastAPI(
@@ -61,9 +63,24 @@ def create_organization(
     new_organization = models.Organization(
         name=organization.name
     )
+    api_key = new_api_key()
+    new_organization.api_keys.append(
+        models.OrganizationApiKey(token_hash=hash_api_key(api_key))
+    )
 
     db.add(new_organization)
     db.commit()
     db.refresh(new_organization)
 
-    return new_organization
+    return OrganizationResponse.model_validate(new_organization).model_copy(
+        update={"api_key": api_key}
+    )
+
+
+@app.post("/organizations/{organization_id}/api-keys/rotate")
+def rotate_api_key(organization_id, key=Depends(require_organization_access), db: Session = Depends(get_db)):
+    key.revoked_at = datetime.utcnow()
+    token = new_api_key()
+    db.add(models.OrganizationApiKey(organization_id=organization_id, token_hash=hash_api_key(token)))
+    db.commit()
+    return {"api_key": token}

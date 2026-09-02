@@ -37,6 +37,9 @@ class Organization(Base):
         back_populates="organization",
         cascade="all, delete-orphan",
     )
+    api_keys: Mapped[list["OrganizationApiKey"]] = relationship(
+        back_populates="organization", cascade="all, delete-orphan"
+    )
 
 
 class Document(Base):
@@ -143,3 +146,17 @@ class DocumentChunk(Base):
     document: Mapped["Document"] = relationship(
         back_populates="chunks",
     )
+
+
+
+class OrganizationApiKey(Base):
+    __tablename__ = "organization_api_keys"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    organization_id: Mapped[UUID] = mapped_column(
+        ForeignKey("organizations.id"), nullable=False, index=True
+    )
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    organization: Mapped["Organization"] = relationship(back_populates="api_keys")

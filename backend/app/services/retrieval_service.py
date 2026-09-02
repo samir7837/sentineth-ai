@@ -39,6 +39,7 @@ async def retrieve(
             "document_id": payload.get("document_id"),
             "chunk_id": payload.get("chunk_id"),
             "chunk_index": payload.get("chunk_index"),
+            "filename": payload.get("filename"),
             "content": payload.get("content"),
         }
         normalized_results.append(item)
