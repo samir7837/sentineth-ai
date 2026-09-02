@@ -28,3 +28,12 @@ def test_long_text_is_split_with_overlap():
 def test_overlap_must_be_smaller_than_chunk_size():
     with pytest.raises(ValueError):
         chunk_text("some text", chunk_size=100, overlap=100)
+
+
+def test_ci_must_fail_on_this() -> None:
+    """Deliberately false. Exists only to prove CI blocks a broken test.
+
+    This branch is a throwaway used to verify item 0.2's acceptance criterion
+    and is never merged.
+    """
+    assert 1 == 2
