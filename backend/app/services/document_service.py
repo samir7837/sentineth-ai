@@ -35,9 +35,25 @@ async def reindex_document(db: Session, organization_id: UUID, document_id: UUID
     await vector_store.delete_document(str(organization_id), str(document_id))
     db.execute(delete(DocumentChunk).where(DocumentChunk.document_id == document_id))
     db.flush()
-    await ingest_document(db, document, embedding_provider, vector_store)
+    try:
+        await ingest_document(db, document, embedding_provider, vector_store)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     db.refresh(document)
     return document
+
+
+async def _discard_stored_file(storage_provider: StorageProvider, path: str) -> None:
+    """Best effort: a cleanup failure must not mask the original one."""
+    if not path:
+        return
+
+    try:
+        await storage_provider.delete(path)
+    except Exception:
+        logger.exception("Could not delete the stored file at %s", path)
 
 
 def _compute_sha256(content: bytes) -> str:
@@ -87,13 +103,16 @@ async def save_document(
     db.add(document)
     db.flush()
 
+    stored_path = ""
+
     try:
-        document.storage_path = await storage_provider.save(
+        stored_path = await storage_provider.save(
             organization_id=str(organization_id),
             document_id=str(document.id),
             filename=filename,
             content=file_content,
         )
+        document.storage_path = stored_path
         db.flush()
     except Exception as exc:
         logger.exception(
@@ -128,7 +147,13 @@ async def save_document(
 
         db.rollback()
 
+        # Nothing readable will ever point at these bytes again: the row
+        # is about to say FAILED and no read path serves a FAILED
+        # document. Left alone they would accumulate forever.
+        await _discard_stored_file(storage_provider, stored_path)
+
         document.status = "FAILED"
+        document.storage_path = ""
         document.error_message = str(exc)
         document.error_code = exc.code
 

@@ -5,6 +5,8 @@ using in-memory providers. These are the guardrails AGENTS.md section 34 asks
 for.
 """
 
+from sqlalchemy.orm import Session
+
 from tests.pdf_builder import build_pdf
 
 
@@ -344,3 +346,41 @@ def test_a_failed_document_reports_a_categorised_error_code(
     assert len(items) == 1
     assert items[0]["status"] == "FAILED"
     assert items[0]["error_code"] == "UNSUPPORTED_MEDIA_TYPE"
+
+
+def test_a_failed_upload_leaves_no_file_behind(client, organization, tmp_path):
+    org_id = organization()
+
+    response = client.post(
+        f"/organizations/{org_id}/documents",
+        files=(("file", ("notes.txt", b"plain text notes", "text/plain")),),
+    )
+
+    assert response.status_code == 415
+
+    # The row survives as FAILED, but nothing readable will ever point at
+    # the bytes again, so they should not still be on disk.
+    stored = [
+        path for path in (tmp_path / "documents").rglob("*") if path.is_file()
+    ]
+    assert stored == []
+
+
+def test_a_successful_upload_commits_once(client, organization, monkeypatch):
+    org_id = organization()
+
+    commits = []
+    original_commit = Session.commit
+
+    def counting_commit(self):
+        commits.append(self)
+        return original_commit(self)
+
+    monkeypatch.setattr(Session, "commit", counting_commit)
+
+    response = upload(client, org_id, "revenue.pdf", REVENUE_PDF)
+
+    assert response.status_code == 200
+    # One layer owns the transaction boundary: the request writes the
+    # document, its chunks and its READY status or none of them.
+    assert len(commits) == 1

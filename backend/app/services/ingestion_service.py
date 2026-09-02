@@ -25,6 +25,12 @@ async def ingest_document(
     embedding_provider: EmbeddingProvider,
     vector_store: VectorStore,
 ) -> list[DocumentChunk]:
+    """Chunk, embed and index a document.
+
+    Flushes but never commits or rolls back: the caller owns the
+    transaction boundary. A failure here has to be undone together with
+    the document row itself, and only the caller can see both.
+    """
     document.status = "PROCESSING"
     document.error_message = None
     document.error_code = None
@@ -126,8 +132,6 @@ async def ingest_document(
         document.error_message = None
         document.error_code = None
 
-        db.commit()
-
         return document_chunks
 
     except DocumentProcessingError:
@@ -137,8 +141,6 @@ async def ingest_document(
             extra={"document_id": str(document.id)},
         )
 
-        db.rollback()
-
         raise
 
     except Exception as exc:
@@ -147,8 +149,6 @@ async def ingest_document(
             document.id,
             extra={"document_id": str(document.id)},
         )
-
-        db.rollback()
 
         raise DocumentProcessingError(
             "Document processing failed."
