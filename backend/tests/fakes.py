@@ -23,29 +23,19 @@ class FakeEmbeddingProvider(EmbeddingProvider):
 
     Not semantic, but texts sharing words land closer together, which is
     enough to assert that retrieval ranks the relevant chunk first.
-
-    `max_input_tokens` mirrors all-MiniLM-L6-v2 so the suite runs against
-    the same limit production does, and inherits the base class's
-    character-based token estimate.
     """
 
     def __init__(
         self,
         dimension: int = 64,
-        max_input_tokens: int = 256,
     ) -> None:
         self._dimension = dimension
-        self._max_input_tokens = max_input_tokens
 
     @property
     def dimension(self) -> int:
         return self._dimension
 
-    @property
-    def max_input_tokens(self) -> int:
-        return self._max_input_tokens
-
-    async def _embed(self, texts: list[str]) -> list[list[float]]:
+    async def embed(self, texts: list[str]) -> list[list[float]]:
         return [self._vector(text) for text in texts]
 
     def _vector(self, text: str) -> list[float]:
