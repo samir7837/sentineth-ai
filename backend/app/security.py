@@ -37,6 +37,8 @@ def require_organization_access(
         OrganizationApiKey.token_hash == hash_api_key(credentials.credentials),
         OrganizationApiKey.revoked_at.is_(None),
     ))
-    if key is None:
+    # Expiry is checked in Python so an expired key is indistinguishable from
+    # an unknown one from the caller's side.
+    if key is None or not key.active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="API key is not authorized for this organization")
     return key

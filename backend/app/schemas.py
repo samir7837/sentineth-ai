@@ -1,7 +1,7 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class OrganizationCreate(BaseModel):
@@ -16,6 +16,38 @@ class OrganizationResponse(BaseModel):
     api_key: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class ApiKeyResponse(BaseModel):
+    """API-key metadata. Deliberately carries no token or token hash."""
+
+    id: UUID
+    created_at: datetime
+    expires_at: datetime | None = None
+    revoked_at: datetime | None = None
+    active: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ApiKeyIssued(ApiKeyResponse):
+    """The one response that contains a token, because it is the only
+    moment the plaintext exists. Only the hash is stored."""
+
+    api_key: str
+
+
+class ApiKeyRotateRequest(BaseModel):
+    expires_at: datetime | None = None
+
+    @field_validator("expires_at")
+    @classmethod
+    def _as_naive_utc(cls, value: datetime | None) -> datetime | None:
+        # The column is naive UTC; an aware value would raise TypeError on
+        # comparison in OrganizationApiKey.active.
+        if value is None or value.tzinfo is None:
+            return value
+        return value.astimezone(UTC).replace(tzinfo=None)
 
 
 class SearchRequest(BaseModel):
