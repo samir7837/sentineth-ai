@@ -119,7 +119,7 @@ class QdrantVectorStore(VectorStore):
         points: list[qmodels.PointStruct] = []
 
         for index, (vector, payload) in enumerate(
-            zip(vectors, payloads)
+            zip(vectors, payloads, strict=True)
         ):
             if len(vector) != self.vector_size:
                 raise ValueError(

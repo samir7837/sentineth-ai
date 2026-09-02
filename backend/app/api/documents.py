@@ -2,35 +2,31 @@ import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
-
+from app.db.models import Document
 from app.dependencies import (
     get_embedding_provider,
     get_llm_provider,
     get_storage_provider,
     get_vector_store,
 )
-
 from app.providers.embeddings.base import EmbeddingProvider
 from app.providers.llm.base import LLMProvider
 from app.providers.storage.base import StorageProvider
 from app.providers.vector.base import VectorStore
-
 from app.schemas import (
     QueryRequest,
     QueryResponse,
     SearchRequest,
     SearchResponse,
 )
-
+from app.security import require_organization_access
 from app.services.document_service import delete_document, reindex_document, save_document
-from app.db.models import Document
-from sqlalchemy import select
 from app.services.query_service import answer_query
 from app.services.retrieval_service import retrieve
-from app.security import require_organization_access
 
 
 logger = logging.getLogger(__name__)

@@ -3,11 +3,10 @@ from pathlib import Path
 from uuid import UUID
 
 from fastapi import UploadFile
-from sqlalchemy.orm import Session
 from sqlalchemy import delete
+from sqlalchemy.orm import Session
 
-from app.db.models import Document
-from app.db.models import DocumentChunk
+from app.db.models import Document, DocumentChunk
 from app.providers.embeddings.base import EmbeddingProvider
 from app.providers.storage.base import StorageProvider
 from app.providers.vector.base import VectorStore

@@ -73,7 +73,7 @@ class FakeVectorStore(VectorStore):
 
         org_id = str(organization_id)
 
-        for index, (vector, payload) in enumerate(zip(vectors, payloads)):
+        for index, (vector, payload) in enumerate(zip(vectors, payloads, strict=True)):
             stored_payload = dict(payload)
             stored_payload["organization_id"] = org_id
 
@@ -105,7 +105,7 @@ class FakeVectorStore(VectorStore):
 
             score = sum(
                 a * b
-                for a, b in zip(query_vector, point["vector"])
+                for a, b in zip(query_vector, point["vector"], strict=True)
             )
             scored.append((score, point_id, point))
 

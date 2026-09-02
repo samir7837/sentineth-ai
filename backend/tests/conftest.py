@@ -7,6 +7,7 @@ Tests never touch Postgres, Qdrant, or a real LLM.
 
 import os
 
+
 os.environ["DATABASE_URL"] = "sqlite://"
 os.environ["SQL_ECHO"] = "false"
 
@@ -26,7 +27,6 @@ from app.dependencies import (
 from app.main import app
 from app.providers.storage.local import LocalStorageProvider
 from app.security import require_organization_access
-
 from tests.fakes import (
     FakeEmbeddingProvider,
     FakeLLMProvider,

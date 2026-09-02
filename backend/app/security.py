@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.db.models import OrganizationApiKey
 
+
 bearer_scheme = HTTPBearer(auto_error=False)
 
 

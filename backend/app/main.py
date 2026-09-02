@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from fastapi import Depends, FastAPI
 from sqlalchemy.orm import Session
 
+
 # Load environment variables from the project root.
 # Structure:
 # sentineth/
