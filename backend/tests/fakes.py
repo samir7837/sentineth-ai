@@ -120,19 +120,6 @@ class FakeVectorStore(VectorStore):
             for score, point_id, point in scored[:limit]
         ]
 
-    async def delete(
-        self,
-        organization_id: str,
-        ids: list[str],
-    ) -> None:
-        org_id = str(organization_id)
-
-        for point_id in list(ids):
-            point = self.points.get(point_id)
-
-            if point and point["payload"].get("organization_id") == org_id:
-                del self.points[point_id]
-
     async def delete_document(self, organization_id: str, document_id: str) -> None:
         for point_id, point in list(self.points.items()):
             payload = point["payload"]

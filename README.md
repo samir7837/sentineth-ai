@@ -223,13 +223,13 @@ From `backend/`:
 python -m pytest
 ```
 
-13 tests, about half a second, no Docker and no network required. They run
+33 tests, well under a second, no Docker and no network required. They run
 against SQLite in memory with in-memory embedding, vector and LLM providers,
 but real PDF parsing, real chunking and real on-disk storage.
 
 The suite covers the whole upload-to-answer path, organization isolation, chunk
-overlap, and the source-citation regression that made `sources[].filename`
-always null.
+overlap, the source-citation regression that made `sources[].filename` always
+null, the API-key lifecycle, and the structured log line every request emits.
 
 The fakes in `tests/fakes.py` subclass the real provider interfaces, so if a
 provider signature changes without its implementations following, the tests

@@ -43,7 +43,6 @@ extend-immutable-calls = [
 "alembic/env.py" = ["E402"]
 "app/main.py" = ["E402"]
 # Throwaway import-smoke script; removed in Phase 0 item 0.8.
-"verify_wiring.py" = ["E402", "F401"]
 
 [tool.mypy]
 python_version = "3.13"
