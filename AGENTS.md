@@ -1570,7 +1570,7 @@ FastAPI API:                WORKING
 Swagger/OpenAPI:            WORKING
 Production readiness:      NOT YET
 Frontend:                   NOT YET COMPLETE
-Auth:                       NOT YET COMPLETE
+Auth:                       MVP API KEYS IMPLEMENTED
 Connectors:                 NOT YET IMPLEMENTED
 ```
 
@@ -1597,6 +1597,18 @@ Recommended next priorities:
 13. Introduce background ingestion jobs.
 14. Add the first real connector, preferably GitHub.
 15. Add retrieval evaluation datasets and metrics.
+
+## Current hardening checklist
+
+- [x] Token-safe chunking and a collection-wide reindex tool
+- [x] Organization-scoped, hashed bearer API keys for document APIs
+- [ ] API-key rotation and revocation endpoints
+- [ ] Document list, delete, and single-document reindex endpoints
+- [ ] Background ingestion, product UI, object storage, CI, and connectors
+
+API keys are returned only when an organization is created. Store them in a
+secret manager and supply them as `Authorization: Bearer <key>` for document,
+search, and query requests.
 
 ---
 

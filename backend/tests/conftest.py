@@ -25,6 +25,7 @@ from app.dependencies import (
 )
 from app.main import app
 from app.providers.storage.local import LocalStorageProvider
+from app.security import require_organization_access
 
 from tests.fakes import (
     FakeEmbeddingProvider,
@@ -52,6 +53,11 @@ def db_session_factory():
 
 
 @pytest.fixture
+def embedding_provider():
+    return FakeEmbeddingProvider()
+
+
+@pytest.fixture
 def vector_store():
     return FakeVectorStore()
 
@@ -62,9 +68,13 @@ def llm_provider():
 
 
 @pytest.fixture
-def client(db_session_factory, vector_store, llm_provider, tmp_path):
-    embedding_provider = FakeEmbeddingProvider()
-
+def client(
+    db_session_factory,
+    embedding_provider,
+    vector_store,
+    llm_provider,
+    tmp_path,
+):
     # The real storage provider, pointed at a temp dir, so filename
     # sanitizing and path containment are exercised for real.
     storage_provider = LocalStorageProvider(tmp_path / "documents")
@@ -83,6 +93,7 @@ def client(db_session_factory, vector_store, llm_provider, tmp_path):
     app.dependency_overrides[get_vector_store] = lambda: vector_store
     app.dependency_overrides[get_storage_provider] = lambda: storage_provider
     app.dependency_overrides[get_llm_provider] = lambda: llm_provider
+    app.dependency_overrides[require_organization_access] = lambda: None
 
     with TestClient(app) as test_client:
         yield test_client

@@ -4,12 +4,36 @@ from uuid import UUID
 
 from fastapi import UploadFile
 from sqlalchemy.orm import Session
+from sqlalchemy import delete
 
 from app.db.models import Document
+from app.db.models import DocumentChunk
 from app.providers.embeddings.base import EmbeddingProvider
 from app.providers.storage.base import StorageProvider
 from app.providers.vector.base import VectorStore
 from app.services.ingestion_service import ingest_document
+
+
+async def delete_document(db: Session, organization_id: UUID, document_id: UUID, storage_provider: StorageProvider, vector_store: VectorStore) -> None:
+    document = db.get(Document, document_id)
+    if document is None or document.organization_id != organization_id:
+        raise LookupError("Document not found.")
+    await vector_store.delete_document(str(organization_id), str(document_id))
+    await storage_provider.delete(document.storage_path)
+    db.delete(document)
+    db.commit()
+
+
+async def reindex_document(db: Session, organization_id: UUID, document_id: UUID, embedding_provider: EmbeddingProvider, vector_store: VectorStore) -> Document:
+    document = db.get(Document, document_id)
+    if document is None or document.organization_id != organization_id:
+        raise LookupError("Document not found.")
+    await vector_store.delete_document(str(organization_id), str(document_id))
+    db.execute(delete(DocumentChunk).where(DocumentChunk.document_id == document_id))
+    db.flush()
+    await ingest_document(db, document, embedding_provider, vector_store)
+    db.refresh(document)
+    return document
 
 
 def _compute_sha256(content: bytes) -> str:

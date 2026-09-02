@@ -25,9 +25,12 @@ from app.schemas import (
     SearchResponse,
 )
 
-from app.services.document_service import save_document
+from app.services.document_service import delete_document, reindex_document, save_document
+from app.db.models import Document
+from sqlalchemy import select
 from app.services.query_service import answer_query
 from app.services.retrieval_service import retrieve
+from app.security import require_organization_access
 
 
 logger = logging.getLogger(__name__)
@@ -38,10 +41,30 @@ router = APIRouter(
     tags=["Documents"],
 )
 
+@router.get("/{organization_id}/documents")
+def list_documents(organization_id: UUID, _: object = Depends(require_organization_access), db: Session = Depends(get_db)):
+    return list(db.scalars(select(Document).where(Document.organization_id == organization_id).order_by(Document.created_at.desc())))
+
+@router.delete("/{organization_id}/documents/{document_id}", status_code=204)
+async def remove_document(organization_id: UUID, document_id: UUID, _: object = Depends(require_organization_access), db: Session = Depends(get_db), storage_provider: StorageProvider = Depends(get_storage_provider), vector_store: VectorStore = Depends(get_vector_store)):
+    try:
+        await delete_document(db, organization_id, document_id, storage_provider, vector_store)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+@router.post("/{organization_id}/documents/{document_id}/reindex")
+async def reindex_one_document(organization_id: UUID, document_id: UUID, _: object = Depends(require_organization_access), db: Session = Depends(get_db), embedding_provider: EmbeddingProvider = Depends(get_embedding_provider), vector_store: VectorStore = Depends(get_vector_store)):
+    try:
+        document = await reindex_document(db, organization_id, document_id, embedding_provider, vector_store)
+        return {"id": str(document.id), "status": document.status, "chunks": len(document.chunks)}
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
 
 @router.post("/{organization_id}/documents")
 async def upload_document(
     organization_id: UUID,
+    _: object = Depends(require_organization_access),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     storage_provider: StorageProvider = Depends(get_storage_provider),
@@ -89,6 +112,7 @@ async def upload_document(
 async def search_documents(
     organization_id: UUID,
     payload: SearchRequest,
+    _: object = Depends(require_organization_access),
     embedding_provider: EmbeddingProvider = Depends(
         get_embedding_provider
     ),
@@ -137,6 +161,7 @@ async def search_documents(
 async def query_documents(
     organization_id: UUID,
     payload: QueryRequest,
+    _: object = Depends(require_organization_access),
     embedding_provider: EmbeddingProvider = Depends(
         get_embedding_provider
     ),

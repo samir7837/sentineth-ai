@@ -13,6 +13,7 @@ class OrganizationResponse(BaseModel):
     name: str
     created_at: datetime
     updated_at: datetime
+    api_key: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
