@@ -1,12 +1,22 @@
+import logging
 from typing import Any
 
 from sqlalchemy.orm import Session
 
 from app.db.models import Document, DocumentChunk
+from app.errors import (
+    DocumentProcessingError,
+    ExtractionFailed,
+    ProviderUnavailable,
+    UnsupportedMediaType,
+)
 from app.providers.embeddings.base import EmbeddingProvider
 from app.providers.vector.base import VectorStore
 from app.services.chunking_service import chunk_text
 from app.services.extraction_service import extract_text_from_pdf
+
+
+logger = logging.getLogger(__name__)
 
 
 async def ingest_document(
@@ -21,20 +31,25 @@ async def ingest_document(
 
     try:
         if document.content_type != "application/pdf":
-            raise ValueError(
+            raise UnsupportedMediaType(
                 "Only PDF documents are supported right now."
             )
 
         # Extract text from the stored document.
-        text = extract_text_from_pdf(
-            document.storage_path
-        )
+        try:
+            text = extract_text_from_pdf(
+                document.storage_path
+            )
+        except Exception as exc:
+            raise ExtractionFailed(
+                "Could not read text from the document."
+            ) from exc
 
         # Split extracted text into chunks.
         chunks = chunk_text(text)
 
         if not chunks:
-            raise ValueError(
+            raise ExtractionFailed(
                 "Document produced no usable chunks."
             )
 
@@ -61,12 +76,17 @@ async def ingest_document(
             for chunk in document_chunks
         ]
 
-        embeddings = await embedding_provider.embed(
-            chunk_texts
-        )
+        try:
+            embeddings = await embedding_provider.embed(
+                chunk_texts
+            )
+        except Exception as exc:
+            raise ProviderUnavailable(
+                "Embedding provider is unavailable."
+            ) from exc
 
         if len(embeddings) != len(document_chunks):
-            raise ValueError(
+            raise DocumentProcessingError(
                 "Embedding count does not match chunk count."
             )
 
@@ -90,11 +110,16 @@ async def ingest_document(
             )
 
         # Store embeddings in Qdrant.
-        await vector_store.upsert(
-            organization_id=organization_id,
-            vectors=embeddings,
-            payloads=payloads,
-        )
+        try:
+            await vector_store.upsert(
+                organization_id=organization_id,
+                vectors=embeddings,
+                payloads=payloads,
+            )
+        except Exception as exc:
+            raise ProviderUnavailable(
+                "Vector store is unavailable."
+            ) from exc
 
         # Everything succeeded.
         document.status = "READY"
@@ -105,13 +130,26 @@ async def ingest_document(
 
         return document_chunks
 
-    except Exception as exc:
-        document.status = "FAILED"
-        document.error_message = "Document processing failed."
-        document.error_code = "PROCESSING_FAILED"
+    except DocumentProcessingError:
+        logger.exception(
+            "Ingestion failed for document %s",
+            document.id,
+            extra={"document_id": str(document.id)},
+        )
 
         db.rollback()
 
-        raise ValueError(
+        raise
+
+    except Exception as exc:
+        logger.exception(
+            "Ingestion failed for document %s",
+            document.id,
+            extra={"document_id": str(document.id)},
+        )
+
+        db.rollback()
+
+        raise DocumentProcessingError(
             "Document processing failed."
         ) from exc

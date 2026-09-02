@@ -188,9 +188,8 @@ def test_non_pdf_upload_is_rejected(client, organization, vector_store):
         files=(("file", ("notes.txt", b"plain text notes", "text/plain")),),
     )
 
-    # TODO: this should be 415 Unsupported Media Type, not 500. The
-    # endpoint currently maps every ValueError to 500.
-    assert response.status_code == 500
+    assert response.status_code == 415
+    assert response.json()["detail"]["error_code"] == "UNSUPPORTED_MEDIA_TYPE"
     assert vector_store.points == {}
 
 
@@ -202,7 +201,8 @@ def test_empty_upload_is_rejected(client, organization):
         files=(("file", ("empty.pdf", b"", "application/pdf")),),
     )
 
-    assert response.status_code == 500
+    assert response.status_code == 422
+    assert response.json()["detail"]["error_code"] == "EXTRACTION_FAILED"
 
 
 def test_query_validation_rejects_blank_and_oversized_limit(
@@ -343,4 +343,4 @@ def test_a_failed_document_reports_a_categorised_error_code(
 
     assert len(items) == 1
     assert items[0]["status"] == "FAILED"
-    assert items[0]["error_code"] == "PROCESSING_FAILED"
+    assert items[0]["error_code"] == "UNSUPPORTED_MEDIA_TYPE"

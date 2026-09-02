@@ -1,8 +1,10 @@
+import logging
+import time
 from pathlib import Path
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -25,6 +27,7 @@ from app.api.documents import router as documents_router
 from app.clock import utcnow
 from app.db import models
 from app.db.database import get_db
+from app.logging_config import configure_logging, request_id_var
 from app.schemas import (
     ApiKeyIssued,
     ApiKeyResponse,
@@ -35,11 +38,58 @@ from app.schemas import (
 from app.security import hash_api_key, new_api_key, require_organization_access
 
 
+configure_logging()
+
+logger = logging.getLogger(__name__)
+
+
 app = FastAPI(
     title="Sentineth AI",
     description="Organizational Intelligence Platform",
     version="0.1.0",
 )
+
+
+@app.middleware("http")
+async def log_request(request: Request, call_next):
+    """One structured line per request, tagged with a request id.
+
+    The id is taken from an inbound X-Request-ID when the caller supplies
+    one, so a trace survives across services, and is echoed back on the
+    response either way. It lives in a contextvar, which is how every log
+    line emitted deeper in the stack picks it up.
+    """
+    request_id = request.headers.get("x-request-id") or uuid4().hex
+    token = request_id_var.set(request_id)
+    started = time.perf_counter()
+
+    context = {
+        "method": request.method,
+        "path": request.url.path,
+    }
+
+    try:
+        response = await call_next(request)
+    except Exception:
+        logger.exception(
+            "request failed",
+            extra=context
+            | {"duration_ms": round((time.perf_counter() - started) * 1000, 2)},
+        )
+        raise
+    else:
+        logger.info(
+            "request completed",
+            extra=context
+            | {
+                "status_code": response.status_code,
+                "duration_ms": round((time.perf_counter() - started) * 1000, 2),
+            },
+        )
+        response.headers["X-Request-ID"] = request_id
+        return response
+    finally:
+        request_id_var.reset(token)
 
 
 app.include_router(documents_router)

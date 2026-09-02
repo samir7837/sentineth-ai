@@ -13,6 +13,7 @@ from app.dependencies import (
     get_storage_provider,
     get_vector_store,
 )
+from app.errors import DocumentProcessingError
 from app.providers.embeddings.base import EmbeddingProvider
 from app.providers.llm.base import LLMProvider
 from app.providers.storage.base import StorageProvider
@@ -113,10 +114,12 @@ async def upload_document(
             embedding_provider=embedding_provider,
             vector_store=vector_store,
         )
-    except ValueError as exc:
+    except DocumentProcessingError as exc:
+        # exc carries its own status and code, so the route does not
+        # re-derive the mapping and every failure answers consistently.
         raise HTTPException(
-            status_code=500,
-            detail=str(exc),
+            status_code=exc.status_code,
+            detail={"error_code": exc.code, "message": str(exc)},
         ) from exc
 
     if document.status == "READY":

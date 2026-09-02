@@ -1,4 +1,5 @@
 import hashlib
+import logging
 from pathlib import Path
 from uuid import UUID
 
@@ -7,10 +8,14 @@ from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
 from app.db.models import Document, DocumentChunk
+from app.errors import DocumentProcessingError, ExtractionFailed
 from app.providers.embeddings.base import EmbeddingProvider
 from app.providers.storage.base import StorageProvider
 from app.providers.vector.base import VectorStore
 from app.services.ingestion_service import ingest_document
+
+
+logger = logging.getLogger(__name__)
 
 
 async def delete_document(db: Session, organization_id: UUID, document_id: UUID, storage_provider: StorageProvider, vector_store: VectorStore) -> None:
@@ -51,7 +56,7 @@ async def save_document(
     file_content = await file.read()
 
     if not file_content:
-        raise ValueError("Uploaded document is empty.")
+        raise ExtractionFailed("Uploaded document is empty.")
 
     content_hash = _compute_sha256(file_content)
 
@@ -91,10 +96,16 @@ async def save_document(
         )
         db.flush()
     except Exception as exc:
+        logger.exception(
+            "Storing the uploaded file failed for document %s",
+            document.id,
+            extra={"document_id": str(document.id)},
+        )
+
         db.rollback()
 
-        raise ValueError(
-            "Failed to store uploaded document."
+        raise DocumentProcessingError(
+            "Failed to store the uploaded document."
         ) from exc
 
     try:
@@ -108,12 +119,18 @@ async def save_document(
         db.commit()
         db.refresh(document)
 
-    except Exception as exc:
+    except DocumentProcessingError as exc:
+        logger.exception(
+            "Document processing failed for document %s",
+            document.id,
+            extra={"document_id": str(document.id), "error_code": exc.code},
+        )
+
         db.rollback()
 
         document.status = "FAILED"
-        document.error_message = "Document processing failed."
-        document.error_code = "PROCESSING_FAILED"
+        document.error_message = str(exc)
+        document.error_code = exc.code
 
         try:
             db.add(document)
@@ -121,8 +138,6 @@ async def save_document(
         except Exception:
             db.rollback()
 
-        raise ValueError(
-            "Document processing failed."
-        ) from exc
+        raise
 
     return document
