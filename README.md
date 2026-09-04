@@ -241,7 +241,7 @@ From `backend/`:
 python -m pytest
 ```
 
-36 tests, well under a second, no Docker and no network required. They run
+38 tests, well under a second, no Docker and no network required. They run
 against SQLite in memory with in-memory embedding, vector and LLM providers,
 but real PDF parsing, real chunking and real on-disk storage.
 
@@ -343,6 +343,8 @@ mismatch produces a compatibility warning at startup and, across larger gaps,
 real API differences. Bump both together.
 
 ## Not built yet
+
+What gets built next, and in what order, is in `docs/ROADMAP.md`.
 
 - User accounts, roles and permissions. A key authenticates an organization,
   not a person, so there is no way to say who did what or to give one user
