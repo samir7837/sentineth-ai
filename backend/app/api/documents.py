@@ -83,13 +83,22 @@ async def remove_document(organization_id: UUID, document_id: UUID, _: object = 
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
-@router.post("/{organization_id}/documents/{document_id}/reindex")
+@router.post(
+    "/{organization_id}/documents/{document_id}/reindex",
+    response_model=DocumentResponse,
+)
 async def reindex_one_document(organization_id: UUID, document_id: UUID, _: object = Depends(require_organization_access), db: Session = Depends(get_db), embedding_provider: EmbeddingProvider = Depends(get_embedding_provider), vector_store: VectorStore = Depends(get_vector_store)):
     try:
         document = await reindex_document(db, organization_id, document_id, embedding_provider, vector_store)
-        return {"id": str(document.id), "status": document.status, "chunks": len(document.chunks)}
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except DocumentProcessingError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail={"error_code": exc.code, "message": str(exc)},
+        ) from exc
+
+    return DocumentResponse.model_validate(document)
 
 
 @router.post(

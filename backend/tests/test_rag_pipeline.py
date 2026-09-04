@@ -384,3 +384,37 @@ def test_a_successful_upload_commits_once(client, organization, monkeypatch):
     # One layer owns the transaction boundary: the request writes the
     # document, its chunks and its READY status or none of them.
     assert len(commits) == 1
+
+
+def test_reindexing_rebuilds_the_vectors_and_returns_the_document(
+    client, organization, vector_store
+):
+    org_id = organization()
+    document_id = upload(client, org_id, "revenue.pdf", REVENUE_PDF).json()["id"]
+
+    indexed = dict(vector_store.points)
+    assert indexed
+
+    response = client.post(
+        f"/organizations/{org_id}/documents/{document_id}/reindex"
+    )
+
+    assert response.status_code == 200, response.text
+
+    body = response.json()
+    assert set(body) == PUBLIC_DOCUMENT_FIELDS
+    assert body["id"] == document_id
+    assert body["status"] == "READY"
+    assert body["chunk_count"] == len(indexed)
+
+    # The old points were dropped and rebuilt, not added alongside.
+    assert len(vector_store.points) == len(indexed)
+
+
+def test_reindexing_an_unknown_document_is_a_404(client, organization):
+    org_id = organization()
+
+    assert client.post(
+        f"/organizations/{org_id}/documents/"
+        "00000000-0000-0000-0000-000000000000/reindex"
+    ).status_code == 404
